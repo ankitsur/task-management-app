@@ -2,13 +2,22 @@ import 'dotenv/config';
 
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // ✅ Enable CORS for frontend dev server
+  app.enableCors({
+    origin: 'http://localhost:5173',
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type'],
+  });
+
+  // ✅ Global validation (already correct)
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -17,8 +26,10 @@ async function bootstrap() {
     }),
   );
 
+  // ✅ Global exception filter
   app.useGlobalFilters(new HttpExceptionFilter());
 
+  // ✅ Swagger setup
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Task Management API')
     .setDescription('Task Management Application API')
