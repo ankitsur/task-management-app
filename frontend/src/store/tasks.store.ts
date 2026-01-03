@@ -1,37 +1,53 @@
 import { create } from 'zustand'
-import type { Task } from '@/types/task'
+import type { Task, PaginatedTasksResponse } from '@/types/task'
 import {
   getTasks,
   getTaskById,
   createTask,
   updateTask,
   deleteTask,
+  GetTasksParams,
 } from '@/api/tasks.api'
 
 interface TasksState {
   tasks: Task[]
+  pagination: {
+    page: number
+    limit: number
+    total: number
+    totalPages: number
+  } | null
   selectedTask: Task | null
   loading: boolean
   error: string | null
 
-  fetchTasks: () => Promise<void>
+  fetchTasks: (params?: GetTasksParams) => Promise<void>
   fetchTaskById: (id: string) => Promise<void>
   createTask: (payload: Partial<Task>) => Promise<void>
   updateTask: (id: string, payload: Partial<Task>) => Promise<void>
   deleteTask: (id: string) => Promise<void>
 }
 
-export const useTasksStore = create<TasksState>((set) => ({
+export const useTasksStore = create<TasksState>((set, get) => ({
   tasks: [],
+  pagination: null,
   selectedTask: null,
   loading: false,
   error: null,
 
-  fetchTasks: async () => {
+  fetchTasks: async (params?: GetTasksParams) => {
     set({ loading: true, error: null })
     try {
-      const res = await getTasks()
-      set({ tasks: res.data, loading: false })
+      const res: PaginatedTasksResponse = await getTasks(params)
+      const totalPages = Math.ceil(res.meta.total / res.meta.limit)
+      set({
+        tasks: res.data,
+        pagination: {
+          ...res.meta,
+          totalPages,
+        },
+        loading: false
+      })
     } catch (err) {
       set({
         error: (err as Error).message,
@@ -57,8 +73,9 @@ export const useTasksStore = create<TasksState>((set) => ({
     set({ loading: true, error: null })
     try {
       await createTask(payload)
-      const res = await getTasks()
-      set({ tasks: res.data, loading: false })
+      // Refresh current page after creating
+      const { fetchTasks } = get()
+      await fetchTasks()
     } catch (err) {
       set({
         error: (err as Error).message,
@@ -71,8 +88,9 @@ export const useTasksStore = create<TasksState>((set) => ({
     set({ loading: true, error: null })
     try {
       await updateTask(id, payload)
-      const res = await getTasks()
-      set({ tasks: res.data, loading: false })
+      // Refresh current page after updating
+      const { fetchTasks } = get()
+      await fetchTasks()
     } catch (err) {
       set({
         error: (err as Error).message,
@@ -85,10 +103,9 @@ export const useTasksStore = create<TasksState>((set) => ({
     set({ loading: true, error: null })
     try {
       await deleteTask(id)
-      set((state) => ({
-        tasks: state.tasks.filter((t) => t.id !== id),
-        loading: false,
-      }))
+      // Refresh current page after deleting
+      const { fetchTasks } = get()
+      await fetchTasks()
     } catch (err) {
       set({
         error: (err as Error).message,
