@@ -26,6 +26,7 @@ interface CreateTaskFormProps {
 interface FormFieldProps {
   label: string
   required?: boolean
+  hint?: string
   error?: string
   children: React.ReactNode
 }
@@ -34,16 +35,21 @@ interface FormFieldProps {
    FORM FIELD COMPONENT
 ============================================================================= */
 
-function FormField({ label, required, error, children }: FormFieldProps) {
+function FormField({ label, required, hint, error, children }: FormFieldProps) {
   return (
-    <div className="space-y-2">
-      <label className="block text-sm font-medium text-foreground">
-        {label}
-        {required && <span className="text-destructive ml-1">*</span>}
-      </label>
+    <div className="space-y-1.5">
+      <div className="flex items-baseline justify-between">
+        <label className="block text-sm font-medium text-foreground">
+          {label}
+          {required && <span className="text-destructive ml-1">*</span>}
+        </label>
+        {hint && (
+          <span className="text-xs text-muted-foreground">{hint}</span>
+        )}
+      </div>
       {children}
       {error && (
-        <p className="text-sm text-destructive animate-fade-in">{error}</p>
+        <p className="text-sm text-destructive">{error}</p>
       )}
     </div>
   )
@@ -57,8 +63,10 @@ export function CreateTaskForm({ onSuccess }: CreateTaskFormProps) {
   const createTask = useTasksStore((state) => state.createTask)
   const { showNotification } = useNotifications()
 
+  // Default status to PENDING (matches backend default)
   const [formValues, setFormValues] = useState<CreateTaskInput>({
     title: '',
+    status: 'PENDING',
   })
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -112,7 +120,7 @@ export function CreateTaskForm({ onSuccess }: CreateTaskFormProps) {
   }
 
   return (
-    <Card className="border border-border/60">
+    <Card className="border border-border shadow-sm">
       <CardContent className="pt-6">
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Title */}
@@ -122,13 +130,14 @@ export function CreateTaskForm({ onSuccess }: CreateTaskFormProps) {
               value={formValues.title}
               onChange={(e) => updateField('title', e.target.value)}
               disabled={isSubmitting}
+              autoFocus
             />
           </FormField>
 
           {/* Description */}
-          <FormField label="Description" error={fieldErrors.description}>
+          <FormField label="Description" hint="Optional" error={fieldErrors.description}>
             <Textarea
-              placeholder="Add a description (optional)"
+              placeholder="Add details about this task..."
               value={formValues.description ?? ''}
               onChange={(e) => updateField('description', e.target.value)}
               rows={4}
@@ -141,7 +150,7 @@ export function CreateTaskForm({ onSuccess }: CreateTaskFormProps) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField label="Status">
               <Select
-                value={formValues.status}
+                value={formValues.status ?? 'PENDING'}
                 onValueChange={(value) =>
                   updateField('status', value as CreateTaskInput['status'])
                 }
@@ -159,16 +168,16 @@ export function CreateTaskForm({ onSuccess }: CreateTaskFormProps) {
               </Select>
             </FormField>
 
-            <FormField label="Priority">
+            <FormField label="Priority" hint="Optional">
               <Select
-                value={formValues.priority}
+                value={formValues.priority ?? ''}
                 onValueChange={(value) =>
                   updateField('priority', value as CreateTaskInput['priority'])
                 }
                 disabled={isSubmitting}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select priority" />
+                  <SelectValue placeholder="No priority" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="LOW">Low</SelectItem>
@@ -180,7 +189,7 @@ export function CreateTaskForm({ onSuccess }: CreateTaskFormProps) {
           </div>
 
           {/* Due Date */}
-          <FormField label="Due Date" error={fieldErrors.dueDate}>
+          <FormField label="Due Date" hint="Optional" error={fieldErrors.dueDate}>
             <Input
               type="date"
               value={

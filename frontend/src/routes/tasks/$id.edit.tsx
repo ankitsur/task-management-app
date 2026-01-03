@@ -17,7 +17,7 @@ function NotFoundState() {
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-xl mx-auto px-4 sm:px-6 py-8">
-        <Card className="border border-border/60">
+        <Card className="border border-border">
           <CardContent className="py-12 text-center">
             <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
               <FileText className="h-6 w-6 text-muted-foreground" />
@@ -59,7 +59,7 @@ function UpdateTaskPage() {
     <div className="min-h-screen bg-background">
       <div className="max-w-xl mx-auto px-4 sm:px-6 py-8 space-y-6">
         {/* Back navigation */}
-        <div className="animate-fade-in">
+        <div>
           <Link to={`/tasks/${id}`}>
             <Button variant="ghost" size="sm" className="gap-2 -ml-2">
               <ArrowLeft className="h-4 w-4" />
@@ -69,7 +69,7 @@ function UpdateTaskPage() {
         </div>
 
         {/* Header */}
-        <header className="space-y-2 animate-fade-in stagger-1">
+        <header className="space-y-2">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-primary/10">
               <Edit2 className="h-5 w-5 text-primary" />
@@ -84,12 +84,10 @@ function UpdateTaskPage() {
         </header>
 
         {/* Form */}
-        <div className="animate-fade-in stagger-2">
-          <UpdateTaskForm
-            task={selectedTask}
-            onSuccess={() => navigate({ to: `/tasks/${id}` })}
-          />
-        </div>
+        <UpdateTaskForm
+          task={selectedTask}
+          onSuccess={() => navigate({ to: `/tasks/${id}` })}
+        />
       </div>
     </div>
   )

@@ -82,7 +82,7 @@ function LoadingState() {
     <div className="min-h-screen bg-background">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 space-y-6">
         <div className="h-8 w-32 bg-muted animate-pulse rounded" />
-        <Card className="border border-border/60">
+        <Card className="border border-border">
           <CardContent className="p-6 space-y-6">
             <div className="animate-pulse space-y-4">
               <div className="flex justify-between">
@@ -114,7 +114,7 @@ function ErrorState({ message }: ErrorStateProps) {
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
-        <Card className="border border-border/60">
+        <Card className="border border-border">
           <CardContent className="py-12 text-center">
             <div className="mx-auto w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center mb-4">
               <AlertCircle className="h-6 w-6 text-destructive" />
@@ -144,7 +144,7 @@ function NotFoundState() {
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
-        <Card className="border border-border/60">
+        <Card className="border border-border">
           <CardContent className="py-12 text-center">
             <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
               <FileText className="h-6 w-6 text-muted-foreground" />
@@ -273,7 +273,7 @@ function TaskDetailView({ id }: TaskDetailViewProps) {
     <div className="min-h-screen bg-background">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 space-y-6">
         {/* Navigation & Actions */}
-        <div className="flex items-center justify-between animate-fade-in">
+        <div className="flex items-center justify-between">
           <Link to="/">
             <Button variant="ghost" size="sm" className="gap-2 -ml-2">
               <ArrowLeft className="h-4 w-4" />
@@ -301,7 +301,7 @@ function TaskDetailView({ id }: TaskDetailViewProps) {
         </div>
 
         {/* Main content card */}
-        <Card className="border border-border/60 animate-fade-in stagger-1">
+        <Card className="border border-border">
           <CardContent className="p-6 space-y-6">
             {/* Header */}
             <div className="flex items-start justify-between gap-4">

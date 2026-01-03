@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useTasksStore } from '@/store/tasks.store'
 import { Link } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
@@ -33,7 +33,6 @@ export const Route = createFileRoute('/')({
 
 /* =============================================================================
    STATUS & PRIORITY CONFIGURATION
-   Centralized configuration for consistent styling across the app
 ============================================================================= */
 
 const STATUS_CONFIG: Record<TaskStatus, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }> = {
@@ -83,25 +82,21 @@ function isOverdue(dateString: string, status: TaskStatus): boolean {
 
 interface TaskCardProps {
   task: Task
-  index: number
 }
 
-function TaskCard({ task, index }: TaskCardProps) {
+function TaskCard({ task }: TaskCardProps) {
   const statusConfig = STATUS_CONFIG[task.status]
   const priorityConfig = task.priority ? PRIORITY_CONFIG[task.priority] : null
   const taskIsOverdue = task.dueDate ? isOverdue(task.dueDate, task.status) : false
 
   return (
     <Link to={`/tasks/${task.id}`} className="block group">
-      <Card
-        className="border border-border/60 bg-card card-hover animate-fade-in"
-        style={{ animationDelay: `${index * 50}ms` }}
-      >
+      <Card className="border border-border bg-card card-hover">
         <CardContent className="p-5">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0 space-y-2">
               {/* Title */}
-              <h3 className="font-medium text-foreground group-hover:text-primary transition-colors line-clamp-1">
+              <h3 className="font-medium text-foreground group-hover:text-primary transition-colors duration-150 line-clamp-1">
                 {task.title}
               </h3>
 
@@ -158,7 +153,7 @@ interface EmptyStateProps {
 
 function EmptyState({ hasFilters }: EmptyStateProps) {
   return (
-    <Card className="border border-dashed border-border/60">
+    <Card className="border-2 border-dashed border-border">
       <CardContent className="py-16 text-center">
         <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
           <Inbox className="h-6 w-6 text-muted-foreground" />
@@ -192,7 +187,7 @@ function LoadingSkeleton() {
   return (
     <div className="space-y-3">
       {Array.from({ length: 5 }).map((_, i) => (
-        <Card key={i} className="border border-border/60">
+        <Card key={i} className="border border-border">
           <CardContent className="p-5">
             <div className="animate-pulse space-y-3">
               <div className="flex items-center justify-between">
@@ -340,15 +335,32 @@ function TaskListPage() {
     fetchTasks(params)
   }, [fetchTasks, currentPage, pageSize, debouncedSearch, statusFilter, priorityFilter])
 
-  const hasActiveFilters = debouncedSearch || statusFilter !== 'ALL' || priorityFilter !== 'ALL'
-  const totalPages = pagination?.totalPages ?? 1
-  const totalTasks = pagination?.total ?? tasks.length
+  // Computed values with defensive checks
+  const hasActiveFilters = Boolean(debouncedSearch || statusFilter !== 'ALL' || priorityFilter !== 'ALL')
+  const totalTasks = pagination?.total ?? 0
+  
+  // Fix: Clamp totalPages to ensure it's at least 1 when there are tasks
+  const totalPages = useMemo(() => {
+    if (!pagination || totalTasks === 0) return 1
+    return Math.max(1, Math.ceil(totalTasks / pageSize))
+  }, [pagination, totalTasks, pageSize])
+
+  // Fix: Auto-correct current page if it exceeds total pages (pagination bug fix)
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages)
+    }
+  }, [currentPage, totalPages])
+
+  // Determine if we should show pagination controls
+  const showPagination = !loading && totalTasks > 0 && totalPages > 1
+  const showPageSizeSelector = !loading && totalTasks > 5
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-6">
         {/* Header */}
-        <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 animate-fade-in">
+        <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-primary/10">
@@ -375,7 +387,7 @@ function TaskListPage() {
         </header>
 
         {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-3 animate-fade-in stagger-1">
+        <div className="flex flex-col sm:flex-row gap-3">
           {/* Search */}
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -422,26 +434,29 @@ function TaskListPage() {
         </div>
 
         {/* Results info */}
-        <div className="flex items-center justify-between text-sm animate-fade-in stagger-2">
+        <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">
             {loading ? 'Loading...' : `${totalTasks} task${totalTasks !== 1 ? 's' : ''}`}
           </span>
 
-          {totalPages > 1 && (
-            <Select
-              value={pageSize.toString()}
-              onValueChange={(value) => handleFilterChange('pageSize', Number(value))}
-            >
-              <SelectTrigger className="w-20 h-8">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="5">5</SelectItem>
-                <SelectItem value="10">10</SelectItem>
-                <SelectItem value="20">20</SelectItem>
-                <SelectItem value="50">50</SelectItem>
-              </SelectContent>
-            </Select>
+          {showPageSizeSelector && (
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground text-xs">Per page:</span>
+              <Select
+                value={pageSize.toString()}
+                onValueChange={(value) => handleFilterChange('pageSize', Number(value))}
+              >
+                <SelectTrigger className="w-16 h-8">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="5">5</SelectItem>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="20">20</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           )}
         </div>
 
@@ -452,15 +467,15 @@ function TaskListPage() {
           <EmptyState hasFilters={hasActiveFilters} />
         ) : (
           <div className="space-y-3">
-            {tasks.map((task, index) => (
-              <TaskCard key={task.id} task={task} index={index} />
+            {tasks.map((task) => (
+              <TaskCard key={task.id} task={task} />
             ))}
           </div>
         )}
 
         {/* Pagination */}
-        {!loading && totalPages > 1 && (
-          <div className="pt-4 animate-fade-in">
+        {showPagination && (
+          <div className="pt-4">
             <Pagination
               currentPage={currentPage}
               totalPages={totalPages}

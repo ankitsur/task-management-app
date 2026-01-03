@@ -62,7 +62,7 @@ function NotificationItem({ notification, onRemove }: NotificationItemProps) {
   return (
     <div
       className={cn(
-        'flex items-start gap-3 p-4 rounded-lg border shadow-lg animate-slide-down',
+        'flex items-start gap-3 p-4 rounded-lg border shadow-lg',
         styles.container
       )}
     >
