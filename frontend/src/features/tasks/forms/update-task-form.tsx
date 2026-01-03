@@ -1,12 +1,11 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { createTaskSchema, CreateTaskInput } from '../schemas/create-task.schema'
 import { useTasksStore } from '@/store/tasks.store'
 import { useNotifications } from '@/contexts/notification.context'
-import type { Task } from '@/types/task'
-
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { Card, CardContent } from '@/components/ui/card'
 import {
   Select,
   SelectContent,
@@ -14,143 +13,221 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Loader2 } from 'lucide-react'
+import type { Task } from '@/types/task'
 
-interface Props {
+/* =============================================================================
+   TYPES
+============================================================================= */
+
+interface UpdateTaskFormProps {
   task: Task
   onSuccess: () => void
 }
 
-export function UpdateTaskForm({ task, onSuccess }: Props) {
-  const updateTask = useTasksStore((s) => s.updateTask)
+interface FormFieldProps {
+  label: string
+  required?: boolean
+  error?: string
+  children: React.ReactNode
+}
+
+/* =============================================================================
+   FORM FIELD COMPONENT
+============================================================================= */
+
+function FormField({ label, required, error, children }: FormFieldProps) {
+  return (
+    <div className="space-y-2">
+      <label className="block text-sm font-medium text-foreground">
+        {label}
+        {required && <span className="text-destructive ml-1">*</span>}
+      </label>
+      {children}
+      {error && (
+        <p className="text-sm text-destructive animate-fade-in">{error}</p>
+      )}
+    </div>
+  )
+}
+
+/* =============================================================================
+   HELPER FUNCTIONS
+============================================================================= */
+
+function formatDateForInput(dateString: string | undefined): string {
+  if (!dateString) return ''
+  try {
+    return new Date(dateString).toISOString().split('T')[0]
+  } catch {
+    return ''
+  }
+}
+
+/* =============================================================================
+   MAIN FORM COMPONENT
+============================================================================= */
+
+export function UpdateTaskForm({ task, onSuccess }: UpdateTaskFormProps) {
+  const updateTask = useTasksStore((state) => state.updateTask)
   const { showNotification } = useNotifications()
 
-  const [values, setValues] = useState<CreateTaskInput>({
+  const [formValues, setFormValues] = useState<CreateTaskInput>({
     title: task.title,
-    description: task.description || '',
+    description: task.description ?? '',
     status: task.status,
     priority: task.priority,
     dueDate: task.dueDate,
   })
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const [errors, setErrors] = useState<Record<string, string>>({})
-  const [submitting, setSubmitting] = useState(false)
+  const updateField = useCallback(
+    <K extends keyof CreateTaskInput>(field: K, value: CreateTaskInput[K]) => {
+      setFormValues((prev) => ({ ...prev, [field]: value }))
+      // Clear error when field is modified
+      if (fieldErrors[field]) {
+        setFieldErrors((prev) => {
+          const updated = { ...prev }
+          delete updated[field]
+          return updated
+        })
+      }
+    },
+    [fieldErrors]
+  )
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault()
 
-    const result = createTaskSchema.safeParse(values)
+    // Validate form data
+    const result = createTaskSchema.safeParse(formValues)
 
     if (!result.success) {
-      const fieldErrors: Record<string, string> = {}
+      const errors: Record<string, string> = {}
       result.error.issues.forEach((issue) => {
-        fieldErrors[issue.path[0] as string] = issue.message
+        const path = issue.path[0]
+        if (typeof path === 'string') {
+          errors[path] = issue.message
+        }
       })
-      setErrors(fieldErrors)
+      setFieldErrors(errors)
       return
     }
 
-    setErrors({})
-    setSubmitting(true)
+    setFieldErrors({})
+    setIsSubmitting(true)
 
     try {
       await updateTask(task.id, result.data)
-      showNotification('success', 'Task updated successfully!')
+      showNotification('success', 'Task updated successfully')
       onSuccess()
     } catch (error) {
       showNotification('error', 'Failed to update task. Please try again.')
       console.error('Update task error:', error)
     } finally {
-      setSubmitting(false)
+      setIsSubmitting(false)
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Title */}
-      <div>
-        <label className="block text-sm font-medium mb-1">Title *</label>
-        <Input
-          placeholder="Task title"
-          value={values.title}
-          onChange={(e) =>
-            setValues({ ...values, title: e.target.value })
-          }
-        />
-        {errors.title && (
-          <p className="text-sm text-red-500 mt-1">{errors.title}</p>
-        )}
-      </div>
+    <Card className="border border-border/60">
+      <CardContent className="pt-6">
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Title */}
+          <FormField label="Title" required error={fieldErrors.title}>
+            <Input
+              placeholder="Enter task title"
+              value={formValues.title}
+              onChange={(e) => updateField('title', e.target.value)}
+              disabled={isSubmitting}
+            />
+          </FormField>
 
-      {/* Description */}
-      <div>
-        <label className="block text-sm font-medium mb-1">Description</label>
-        <Textarea
-          placeholder="Task description (optional)"
-          value={values.description ?? ''}
-          onChange={(e) =>
-            setValues({ ...values, description: e.target.value })
-          }
-          rows={4}
-        />
-      </div>
+          {/* Description */}
+          <FormField label="Description" error={fieldErrors.description}>
+            <Textarea
+              placeholder="Add a description (optional)"
+              value={formValues.description ?? ''}
+              onChange={(e) => updateField('description', e.target.value)}
+              rows={4}
+              disabled={isSubmitting}
+              className="resize-none"
+            />
+          </FormField>
 
-      {/* Status */}
-      <div>
-        <label className="block text-sm font-medium mb-1">Status</label>
-        <Select
-          value={values.status}
-          onValueChange={(value) =>
-            setValues({ ...values, status: value as CreateTaskInput['status'] })
-          }
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="PENDING">Pending</SelectItem>
-            <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
-            <SelectItem value="COMPLETED">Completed</SelectItem>
-            <SelectItem value="CANCELLED">Cancelled</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+          {/* Status & Priority */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField label="Status">
+              <Select
+                value={formValues.status}
+                onValueChange={(value) =>
+                  updateField('status', value as CreateTaskInput['status'])
+                }
+                disabled={isSubmitting}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PENDING">Pending</SelectItem>
+                  <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                  <SelectItem value="COMPLETED">Completed</SelectItem>
+                  <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormField>
 
-      {/* Priority */}
-      <div>
-        <label className="block text-sm font-medium mb-1">Priority</label>
-        <Select
-          value={values.priority}
-          onValueChange={(value) =>
-            setValues({ ...values, priority: value as CreateTaskInput['priority'] })
-          }
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select priority (optional)" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="LOW">Low</SelectItem>
-            <SelectItem value="MEDIUM">Medium</SelectItem>
-            <SelectItem value="HIGH">High</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+            <FormField label="Priority">
+              <Select
+                value={formValues.priority}
+                onValueChange={(value) =>
+                  updateField('priority', value as CreateTaskInput['priority'])
+                }
+                disabled={isSubmitting}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select priority" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="LOW">Low</SelectItem>
+                  <SelectItem value="MEDIUM">Medium</SelectItem>
+                  <SelectItem value="HIGH">High</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormField>
+          </div>
 
-      {/* Due Date - TODO: Add date picker */}
-      <div>
-        <label className="block text-sm font-medium mb-1">Due Date</label>
-        <Input
-          type="date"
-          value={values.dueDate ? new Date(values.dueDate).toISOString().split('T')[0] : ''}
-          onChange={(e) => {
-            const dateValue = e.target.value ? new Date(e.target.value).toISOString() : undefined
-            setValues({ ...values, dueDate: dateValue })
-          }}
-        />
-      </div>
+          {/* Due Date */}
+          <FormField label="Due Date" error={fieldErrors.dueDate}>
+            <Input
+              type="date"
+              value={formatDateForInput(formValues.dueDate)}
+              onChange={(e) => {
+                const dateValue = e.target.value
+                  ? new Date(e.target.value).toISOString()
+                  : undefined
+                updateField('dueDate', dateValue)
+              }}
+              disabled={isSubmitting}
+            />
+          </FormField>
 
-      <Button type="submit" disabled={submitting} className="w-full">
-        {submitting ? 'Updating…' : 'Update Task'}
-      </Button>
-    </form>
+          {/* Submit button */}
+          <div className="pt-2">
+            <Button type="submit" disabled={isSubmitting} className="w-full">
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save Changes'
+              )}
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
   )
 }

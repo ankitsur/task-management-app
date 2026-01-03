@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { createTaskSchema, CreateTaskInput } from '../schemas/create-task.schema'
 import { useTasksStore } from '@/store/tasks.store'
 import { useNotifications } from '@/contexts/notification.context'
-
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { Card, CardContent } from '@/components/ui/card'
 import {
   Select,
   SelectContent,
@@ -13,178 +13,206 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Loader2 } from 'lucide-react'
 
-interface Props {
+/* =============================================================================
+   TYPES
+============================================================================= */
+
+interface CreateTaskFormProps {
   onSuccess: () => void
 }
 
-export function CreateTaskForm({ onSuccess }: Props) {
-  const createTask = useTasksStore((s) => s.createTask)
+interface FormFieldProps {
+  label: string
+  required?: boolean
+  error?: string
+  children: React.ReactNode
+}
+
+/* =============================================================================
+   FORM FIELD COMPONENT
+============================================================================= */
+
+function FormField({ label, required, error, children }: FormFieldProps) {
+  return (
+    <div className="space-y-2">
+      <label className="block text-sm font-medium text-foreground">
+        {label}
+        {required && <span className="text-destructive ml-1">*</span>}
+      </label>
+      {children}
+      {error && (
+        <p className="text-sm text-destructive animate-fade-in">{error}</p>
+      )}
+    </div>
+  )
+}
+
+/* =============================================================================
+   MAIN FORM COMPONENT
+============================================================================= */
+
+export function CreateTaskForm({ onSuccess }: CreateTaskFormProps) {
+  const createTask = useTasksStore((state) => state.createTask)
   const { showNotification } = useNotifications()
 
-  const [values, setValues] = useState<CreateTaskInput>({
+  const [formValues, setFormValues] = useState<CreateTaskInput>({
     title: '',
   })
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const [errors, setErrors] = useState<Record<string, string>>({})
-  const [submitting, setSubmitting] = useState(false)
+  const updateField = useCallback(
+    <K extends keyof CreateTaskInput>(field: K, value: CreateTaskInput[K]) => {
+      setFormValues((prev) => ({ ...prev, [field]: value }))
+      // Clear error when field is modified
+      if (fieldErrors[field]) {
+        setFieldErrors((prev) => {
+          const updated = { ...prev }
+          delete updated[field]
+          return updated
+        })
+      }
+    },
+    [fieldErrors]
+  )
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault()
 
-    const result = createTaskSchema.safeParse(values)
+    // Validate form data
+    const result = createTaskSchema.safeParse(formValues)
 
     if (!result.success) {
-      const fieldErrors: Record<string, string> = {}
+      const errors: Record<string, string> = {}
       result.error.issues.forEach((issue) => {
-        fieldErrors[issue.path[0] as string] = issue.message
+        const path = issue.path[0]
+        if (typeof path === 'string') {
+          errors[path] = issue.message
+        }
       })
-      setErrors(fieldErrors)
+      setFieldErrors(errors)
       return
     }
 
-    setErrors({})
-    setSubmitting(true)
+    setFieldErrors({})
+    setIsSubmitting(true)
 
     try {
       await createTask(result.data)
-      showNotification('success', 'Task created successfully!')
+      showNotification('success', 'Task created successfully')
       onSuccess()
     } catch (error) {
       showNotification('error', 'Failed to create task. Please try again.')
       console.error('Create task error:', error)
     } finally {
-      setSubmitting(false)
+      setIsSubmitting(false)
     }
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-xl border-0 p-8 space-y-6 backdrop-blur-sm">
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Title */}
-        <div className="space-y-2 animate-in slide-in-from-left-4 duration-500">
-          <label className="block text-sm font-semibold text-gray-700 flex items-center gap-2">
-            <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
-            Task Title *
-          </label>
-          <Input
-            placeholder="Enter an amazing task title..."
-            value={values.title}
-            onChange={(e) =>
-              setValues({ ...values, title: e.target.value })
-            }
-            className="border-gray-200 focus:border-blue-400 focus:ring-blue-400/20 transition-all duration-200 hover:border-gray-300 text-lg py-3"
-          />
-          {errors.title && (
-            <p className="text-sm text-red-500 mt-1 animate-in slide-in-from-top-2 duration-300">{errors.title}</p>
-          )}
-        </div>
+    <Card className="border border-border/60">
+      <CardContent className="pt-6">
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Title */}
+          <FormField label="Title" required error={fieldErrors.title}>
+            <Input
+              placeholder="Enter task title"
+              value={formValues.title}
+              onChange={(e) => updateField('title', e.target.value)}
+              disabled={isSubmitting}
+            />
+          </FormField>
 
-        {/* Description */}
-        <div className="space-y-2 animate-in slide-in-from-right-4 duration-500 delay-100">
-          <label className="block text-sm font-semibold text-gray-700 flex items-center gap-2">
-            <span className="w-2 h-2 bg-purple-500 rounded-full animate-pulse delay-200"></span>
-            Description
-          </label>
-          <Textarea
-            placeholder="Add some details about your task... (optional)"
-            value={values.description ?? ''}
-            onChange={(e) =>
-              setValues({ ...values, description: e.target.value })
-            }
-            rows={4}
-            className="border-gray-200 focus:border-purple-400 focus:ring-purple-400/20 transition-all duration-200 hover:border-gray-300 resize-none"
-          />
-        </div>
+          {/* Description */}
+          <FormField label="Description" error={fieldErrors.description}>
+            <Textarea
+              placeholder="Add a description (optional)"
+              value={formValues.description ?? ''}
+              onChange={(e) => updateField('description', e.target.value)}
+              rows={4}
+              disabled={isSubmitting}
+              className="resize-none"
+            />
+          </FormField>
 
-        {/* Status & Priority Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in slide-in-from-bottom-4 duration-500 delay-200">
-          {/* Status */}
-          <div className="space-y-2">
-            <label className="block text-sm font-semibold text-gray-700 flex items-center gap-2">
-              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse delay-400"></span>
-              Status
-            </label>
-            <Select
-              onValueChange={(value) =>
-                setValues({ ...values, status: value as CreateTaskInput['status'] })
-              }
-            >
-              <SelectTrigger className="border-gray-200 focus:border-green-400 focus:ring-green-400/20 transition-all duration-200 hover:border-gray-300">
-                <SelectValue placeholder="Select status" />
-              </SelectTrigger>
-              <SelectContent className="border-0 shadow-xl">
-                <SelectItem value="PENDING" className="hover:bg-yellow-50">⏳ Pending</SelectItem>
-                <SelectItem value="IN_PROGRESS" className="hover:bg-blue-50">🔄 In Progress</SelectItem>
-                <SelectItem value="COMPLETED" className="hover:bg-green-50">✅ Completed</SelectItem>
-                <SelectItem value="CANCELLED" className="hover:bg-red-50">❌ Cancelled</SelectItem>
-              </SelectContent>
-            </Select>
+          {/* Status & Priority */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField label="Status">
+              <Select
+                value={formValues.status}
+                onValueChange={(value) =>
+                  updateField('status', value as CreateTaskInput['status'])
+                }
+                disabled={isSubmitting}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PENDING">Pending</SelectItem>
+                  <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                  <SelectItem value="COMPLETED">Completed</SelectItem>
+                  <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormField>
+
+            <FormField label="Priority">
+              <Select
+                value={formValues.priority}
+                onValueChange={(value) =>
+                  updateField('priority', value as CreateTaskInput['priority'])
+                }
+                disabled={isSubmitting}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select priority" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="LOW">Low</SelectItem>
+                  <SelectItem value="MEDIUM">Medium</SelectItem>
+                  <SelectItem value="HIGH">High</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormField>
           </div>
 
-          {/* Priority */}
-          <div className="space-y-2">
-            <label className="block text-sm font-semibold text-gray-700 flex items-center gap-2">
-              <span className="w-2 h-2 bg-orange-500 rounded-full animate-pulse delay-600"></span>
-              Priority
-            </label>
-            <Select
-              onValueChange={(value) =>
-                setValues({ ...values, priority: value as CreateTaskInput['priority'] })
+          {/* Due Date */}
+          <FormField label="Due Date" error={fieldErrors.dueDate}>
+            <Input
+              type="date"
+              value={
+                formValues.dueDate
+                  ? new Date(formValues.dueDate).toISOString().split('T')[0]
+                  : ''
               }
-            >
-              <SelectTrigger className="border-gray-200 focus:border-orange-400 focus:ring-orange-400/20 transition-all duration-200 hover:border-gray-300">
-                <SelectValue placeholder="Select priority" />
-              </SelectTrigger>
-              <SelectContent className="border-0 shadow-xl">
-                <SelectItem value="LOW" className="hover:bg-green-50">🟢 Low</SelectItem>
-                <SelectItem value="MEDIUM" className="hover:bg-yellow-50">🟡 Medium</SelectItem>
-                <SelectItem value="HIGH" className="hover:bg-red-50">🔴 High</SelectItem>
-              </SelectContent>
-            </Select>
+              onChange={(e) => {
+                const dateValue = e.target.value
+                  ? new Date(e.target.value).toISOString()
+                  : undefined
+                updateField('dueDate', dateValue)
+              }}
+              disabled={isSubmitting}
+            />
+          </FormField>
+
+          {/* Submit button */}
+          <div className="pt-2">
+            <Button type="submit" disabled={isSubmitting} className="w-full">
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                'Create Task'
+              )}
+            </Button>
           </div>
-        </div>
-
-        {/* Due Date */}
-        <div className="space-y-2 animate-in slide-in-from-bottom-4 duration-500 delay-300">
-          <label className="block text-sm font-semibold text-gray-700 flex items-center gap-2">
-            <span className="w-2 h-2 bg-pink-500 rounded-full animate-pulse delay-800"></span>
-            Due Date
-          </label>
-          <Input
-            type="date"
-            onChange={(e) => {
-              const dateValue = e.target.value ? new Date(e.target.value).toISOString() : undefined
-              setValues({ ...values, dueDate: dateValue })
-            }}
-            className="border-gray-200 focus:border-pink-400 focus:ring-pink-400/20 transition-all duration-200 hover:border-gray-300"
-          />
-          {errors.dueDate && (
-            <p className="text-sm text-red-500 mt-1 animate-in slide-in-from-top-2 duration-300">{errors.dueDate}</p>
-          )}
-        </div>
-
-        {/* Submit Button */}
-        <div className="pt-4 animate-in slide-in-from-bottom-4 duration-500 delay-400">
-          <Button
-            type="submit"
-            disabled={submitting}
-            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-500 transform hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl py-3 text-lg font-semibold"
-          >
-            {submitting ? (
-              <span className="flex items-center gap-2">
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                Creating Task...
-              </span>
-            ) : (
-              <span className="flex items-center gap-2">
-                ✨ Create Task
-                <span className="animate-bounce">🚀</span>
-              </span>
-            )}
-          </Button>
-        </div>
-      </form>
-    </div>
+        </form>
+      </CardContent>
+    </Card>
   )
 }

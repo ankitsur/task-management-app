@@ -1,263 +1,377 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, useNavigate, Link, Outlet, useMatch } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
-import { Link } from '@tanstack/react-router'
 import { useTasksStore } from '@/store/tasks.store'
 import { useNotifications } from '@/contexts/notification.context'
 import { ConfirmationDialog } from '@/components/confirmation-dialog'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Edit, Trash2, ArrowLeft } from 'lucide-react'
+import {
+  ArrowLeft,
+  Edit2,
+  Trash2,
+  Calendar,
+  Clock,
+  AlertCircle,
+  FileText,
+} from 'lucide-react'
+import type { TaskStatus, TaskPriority } from '@/types/task'
 
 export const Route = createFileRoute('/tasks/$id')({
-  component: TaskDetailPage,
+  component: TaskDetailLayout,
 })
 
-function TaskDetailPage() {
+/* =============================================================================
+   CONFIGURATION
+============================================================================= */
+
+const STATUS_CONFIG: Record<
+  TaskStatus,
+  { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }
+> = {
+  PENDING: { label: 'Pending', variant: 'secondary' },
+  IN_PROGRESS: { label: 'In Progress', variant: 'default' },
+  COMPLETED: { label: 'Completed', variant: 'outline' },
+  CANCELLED: { label: 'Cancelled', variant: 'destructive' },
+}
+
+const PRIORITY_CONFIG: Record<TaskPriority, { label: string; className: string }> = {
+  LOW: {
+    label: 'Low Priority',
+    className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+  },
+  MEDIUM: {
+    label: 'Medium Priority',
+    className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+  },
+  HIGH: {
+    label: 'High Priority',
+    className: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
+  },
+}
+
+/* =============================================================================
+   HELPER FUNCTIONS
+============================================================================= */
+
+function formatDateTime(dateString: string): string {
+  return new Date(dateString).toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+}
+
+function formatTimestamp(dateString: string): string {
+  return new Date(dateString).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+/* =============================================================================
+   LOADING STATE
+============================================================================= */
+
+function LoadingState() {
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+        <div className="h-8 w-32 bg-muted animate-pulse rounded" />
+        <Card className="border border-border/60">
+          <CardContent className="p-6 space-y-6">
+            <div className="animate-pulse space-y-4">
+              <div className="flex justify-between">
+                <div className="h-8 bg-muted rounded w-1/2" />
+                <div className="h-6 bg-muted rounded w-24" />
+              </div>
+              <div className="h-20 bg-muted rounded" />
+              <div className="flex gap-4">
+                <div className="h-10 bg-muted rounded w-32" />
+                <div className="h-10 bg-muted rounded w-32" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+/* =============================================================================
+   ERROR STATE
+============================================================================= */
+
+interface ErrorStateProps {
+  message: string
+}
+
+function ErrorState({ message }: ErrorStateProps) {
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
+        <Card className="border border-border/60">
+          <CardContent className="py-12 text-center">
+            <div className="mx-auto w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center mb-4">
+              <AlertCircle className="h-6 w-6 text-destructive" />
+            </div>
+            <h3 className="text-lg font-medium text-foreground mb-2">
+              Something went wrong
+            </h3>
+            <p className="text-sm text-muted-foreground mb-6">{message}</p>
+            <Link to="/">
+              <Button variant="outline">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Tasks
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+/* =============================================================================
+   NOT FOUND STATE
+============================================================================= */
+
+function NotFoundState() {
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
+        <Card className="border border-border/60">
+          <CardContent className="py-12 text-center">
+            <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
+              <FileText className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-medium text-foreground mb-2">
+              Task not found
+            </h3>
+            <p className="text-sm text-muted-foreground mb-6">
+              The task you're looking for doesn't exist or has been deleted.
+            </p>
+            <Link to="/">
+              <Button variant="outline">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Tasks
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+/* =============================================================================
+   METADATA ITEM COMPONENT
+============================================================================= */
+
+interface MetadataItemProps {
+  icon: React.ReactNode
+  label: string
+  value: string
+}
+
+function MetadataItem({ icon, label, value }: MetadataItemProps) {
+  return (
+    <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
+      <div className="text-muted-foreground mt-0.5">{icon}</div>
+      <div>
+        <p className="text-xs text-muted-foreground uppercase tracking-wide">
+          {label}
+        </p>
+        <p className="text-sm font-medium text-foreground mt-0.5">{value}</p>
+      </div>
+    </div>
+  )
+}
+
+/* =============================================================================
+   LAYOUT COMPONENT (handles both detail and edit as child)
+============================================================================= */
+
+function TaskDetailLayout() {
   const { id } = Route.useParams()
-  const navigate = useNavigate()
-  const { selectedTask, loading, error, fetchTaskById, deleteTask } = useTasksStore()
-  const { showNotification } = useNotifications()
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [isDeleting, setIsDeleting] = useState(false)
+  const { selectedTask, loading, error, fetchTaskById } = useTasksStore()
+  
+  // Check if we're on the edit child route
+  const editMatch = useMatch({ from: '/tasks/$id/edit', shouldThrow: false })
+  const isEditRoute = Boolean(editMatch)
 
   useEffect(() => {
     fetchTaskById(id)
   }, [fetchTaskById, id])
 
+  if (loading) {
+    return <LoadingState />
+  }
+
+  if (error) {
+    return <ErrorState message={error} />
+  }
+
+  if (!selectedTask) {
+    return <NotFoundState />
+  }
+
+  // If on edit route, render the child route (edit form)
+  if (isEditRoute) {
+    return <Outlet />
+  }
+
+  // Otherwise render the detail view
+  return <TaskDetailView id={id} />
+}
+
+/* =============================================================================
+   DETAIL VIEW COMPONENT
+============================================================================= */
+
+interface TaskDetailViewProps {
+  id: string
+}
+
+function TaskDetailView({ id }: TaskDetailViewProps) {
+  const navigate = useNavigate()
+  const { selectedTask, deleteTask } = useTasksStore()
+  const { showNotification } = useNotifications()
+
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+
   const handleDelete = async () => {
     setIsDeleting(true)
     try {
       await deleteTask(id)
-      showNotification('success', 'Task deleted successfully!')
+      showNotification('success', 'Task deleted successfully')
       navigate({ to: '/' })
-    } catch (error) {
+    } catch (err) {
       showNotification('error', 'Failed to delete task. Please try again.')
-      console.error('Failed to delete task:', error)
+      console.error('Failed to delete task:', err)
     } finally {
       setIsDeleting(false)
       setIsDeleteDialogOpen(false)
     }
   }
 
-  const getStatusVariant = (status: string) => {
-    switch (status) {
-      case 'PENDING':
-        return 'secondary'
-      case 'IN_PROGRESS':
-        return 'default'
-      case 'COMPLETED':
-        return 'outline'
-      case 'CANCELLED':
-        return 'destructive'
-      default:
-        return 'secondary'
-    }
-  }
-
-  const getPriorityVariant = (priority?: string) => {
-    switch (priority) {
-      case 'LOW':
-        return 'secondary'
-      case 'MEDIUM':
-        return 'default'
-      case 'HIGH':
-        return 'destructive'
-      default:
-        return 'secondary'
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="p-6 max-w-2xl mx-auto">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
-          <div className="h-64 bg-gray-200 rounded"></div>
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="p-6 max-w-2xl mx-auto">
-        <div className="text-center">
-          <p className="text-red-500 mb-4">{error}</p>
-          <Link to="/">
-            <Button variant="outline">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Tasks
-            </Button>
-          </Link>
-        </div>
-      </div>
-    )
-  }
-
   if (!selectedTask) {
-    return (
-      <div className="p-6 max-w-2xl mx-auto">
-        <div className="text-center">
-          <p className="text-gray-500 mb-4">Task not found</p>
-          <Link to="/">
-            <Button variant="outline">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Tasks
-            </Button>
-          </Link>
-        </div>
-      </div>
-    )
+    return <NotFoundState />
   }
+
+  const statusConfig = STATUS_CONFIG[selectedTask.status]
+  const priorityConfig = selectedTask.priority
+    ? PRIORITY_CONFIG[selectedTask.priority]
+    : null
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-      <div className="max-w-2xl mx-auto p-6 space-y-6">
-        {/* Header with back button and actions */}
-        <div className="flex items-center justify-between animate-in slide-in-from-top-4 duration-500">
+    <div className="min-h-screen bg-background">
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+        {/* Navigation & Actions */}
+        <div className="flex items-center justify-between animate-fade-in">
           <Link to="/">
-            <Button variant="outline" size="sm" className="hover:scale-105 transition-transform duration-200 shadow-sm hover:shadow-md">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Tasks
+            <Button variant="ghost" size="sm" className="gap-2 -ml-2">
+              <ArrowLeft className="h-4 w-4" />
+              Back
             </Button>
           </Link>
-          <div className="flex gap-3 animate-in slide-in-from-right-4 duration-500 delay-100">
+
+          <div className="flex items-center gap-2">
             <Link to={`/tasks/${id}/edit`}>
-              <Button variant="outline" size="sm" className="hover:scale-105 transition-transform duration-200 shadow-sm hover:shadow-md border-blue-200 hover:border-blue-400 hover:bg-blue-50">
-                <Edit className="mr-2 h-4 w-4" />
-                Edit Task
+              <Button variant="outline" size="sm" className="gap-2">
+                <Edit2 className="h-4 w-4" />
+                Edit
               </Button>
             </Link>
             <Button
-              variant="destructive"
+              variant="outline"
               size="sm"
+              className="gap-2 text-destructive hover:text-destructive hover:bg-destructive/10 hover:border-destructive/30"
               onClick={() => setIsDeleteDialogOpen(true)}
-              className="hover:scale-105 transition-transform duration-200 shadow-sm hover:shadow-md"
             >
-              <Trash2 className="mr-2 h-4 w-4" />
+              <Trash2 className="h-4 w-4" />
               Delete
             </Button>
           </div>
         </div>
 
-        {/* Task Content Card */}
-        <Card className="backdrop-blur-sm bg-white/90 border-0 shadow-2xl animate-in slide-in-from-bottom-4 duration-700 delay-200">
-          <CardHeader className="pb-6">
-            <div className="flex items-start justify-between">
-              <CardTitle className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+        {/* Main content card */}
+        <Card className="border border-border/60 animate-fade-in stagger-1">
+          <CardContent className="p-6 space-y-6">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-4">
+              <h1 className="text-xl font-semibold text-foreground leading-tight">
                 {selectedTask.title}
-              </CardTitle>
-              <Badge
-                variant={getStatusVariant(selectedTask.status)}
-                className="animate-in zoom-in-50 duration-500 text-sm px-3 py-1"
-              >
-                {selectedTask.status.replace('_', ' ')}
+              </h1>
+              <Badge variant={statusConfig.variant} className="shrink-0">
+                {statusConfig.label}
               </Badge>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {selectedTask.description && (
-              <div className="animate-in slide-in-from-left-4 duration-500 delay-300">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                  <h3 className="font-semibold text-gray-800">Description</h3>
-                </div>
-                <div className="bg-gradient-to-r from-purple-50 to-blue-50 p-4 rounded-lg border-l-4 border-purple-400">
-                  <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">{selectedTask.description}</p>
-                </div>
+
+            {/* Priority badge */}
+            {priorityConfig && (
+              <div>
+                <span
+                  className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium ${priorityConfig.className}`}
+                >
+                  {priorityConfig.label}
+                </span>
               </div>
             )}
 
-            {/* Status and Priority Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in slide-in-from-right-4 duration-500 delay-400">
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <h3 className="font-semibold text-gray-800">Status</h3>
-                </div>
-                <Badge
-                  variant={getStatusVariant(selectedTask.status)}
-                  className="text-base px-4 py-2 w-fit hover:scale-105 transition-transform duration-200"
-                >
-                  {selectedTask.status.replace('_', ' ')}
-                </Badge>
+            {/* Description */}
+            {selectedTask.description && (
+              <div className="space-y-2">
+                <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                  Description
+                </h2>
+                <p className="text-foreground whitespace-pre-wrap leading-relaxed">
+                  {selectedTask.description}
+                </p>
               </div>
+            )}
 
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-                  <h3 className="font-semibold text-gray-800">Priority</h3>
-                </div>
-                <Badge
-                  variant={selectedTask.priority ? getPriorityVariant(selectedTask.priority) : 'secondary'}
-                  className="text-base px-4 py-2 w-fit hover:scale-105 transition-transform duration-200"
-                >
-                  {selectedTask.priority || 'Not set'}
-                </Badge>
-              </div>
-            </div>
-
+            {/* Due date */}
             {selectedTask.dueDate && (
-              <div className="animate-in slide-in-from-bottom-4 duration-500 delay-500">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-2 h-2 bg-pink-500 rounded-full"></div>
-                  <h3 className="font-semibold text-gray-800">Due Date</h3>
-                </div>
-                <div className="bg-gradient-to-r from-pink-50 to-red-50 p-4 rounded-lg border-l-4 border-pink-400">
-                  <p className="text-lg font-medium text-gray-800">
-                    {new Date(selectedTask.dueDate).toLocaleDateString('en-US', {
-                      weekday: 'long',
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric'
-                    })}
-                  </p>
-                </div>
-              </div>
+              <MetadataItem
+                icon={<Calendar className="h-4 w-4" />}
+                label="Due Date"
+                value={formatDateTime(selectedTask.dueDate)}
+              />
             )}
 
             {/* Timestamps */}
-            <div className="border-t pt-6 animate-in slide-in-from-bottom-4 duration-500 delay-600">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <div className="text-sm text-gray-500 mb-1">Created</div>
-                  <div className="font-medium text-gray-800">
-                    {new Date(selectedTask.createdAt).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </div>
-                </div>
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <div className="text-sm text-gray-500 mb-1">Last Updated</div>
-                  <div className="font-medium text-gray-800">
-                    {new Date(selectedTask.updatedAt).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </div>
-                </div>
+            <div className="pt-4 border-t border-border space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <MetadataItem
+                  icon={<Clock className="h-4 w-4" />}
+                  label="Created"
+                  value={formatTimestamp(selectedTask.createdAt)}
+                />
+                <MetadataItem
+                  icon={<Clock className="h-4 w-4" />}
+                  label="Last Updated"
+                  value={formatTimestamp(selectedTask.updatedAt)}
+                />
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Delete Confirmation Dialog */}
+      {/* Delete confirmation dialog */}
       <ConfirmationDialog
         isOpen={isDeleteDialogOpen}
         onClose={() => setIsDeleteDialogOpen(false)}
         onConfirm={handleDelete}
         title="Delete Task"
-        description={`Are you sure you want to delete "${selectedTask?.title}"? This action cannot be undone.`}
-        confirmText="Delete Task"
+        description={`Are you sure you want to delete "${selectedTask.title}"? This action cannot be undone.`}
+        confirmText="Delete"
         cancelText="Cancel"
         variant="danger"
         isLoading={isDeleting}

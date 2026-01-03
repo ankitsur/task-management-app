@@ -11,7 +11,7 @@ function RootLayout() {
   return (
     <ThemeProvider>
       <NotificationProvider>
-        <div className="min-h-screen">
+        <div className="min-h-screen bg-background text-foreground antialiased">
           <Outlet />
           <NotificationContainer />
         </div>

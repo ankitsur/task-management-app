@@ -1,5 +1,7 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
 import { CreateTaskForm } from '@/features/tasks/forms/create-task-form'
+import { Button } from '@/components/ui/button'
+import { ArrowLeft, FilePlus } from 'lucide-react'
 
 export const Route = createFileRoute('/tasks/new')({
   component: CreateTaskPage,
@@ -9,39 +11,36 @@ function CreateTaskPage() {
   const navigate = useNavigate()
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-      <div className="max-w-xl mx-auto p-6">
-        {/* Back button */}
-        <div className="mb-6 animate-in slide-in-from-left-4 duration-500">
-          <button
-            onClick={() => navigate({ to: '/' })}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors duration-200 group"
-          >
-            <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-sm group-hover:shadow-md transition-shadow duration-200">
-              ←
-            </div>
-            Back to Tasks
-          </button>
+    <div className="min-h-screen bg-background">
+      <div className="max-w-xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+        {/* Back navigation */}
+        <div className="animate-fade-in">
+          <Link to="/">
+            <Button variant="ghost" size="sm" className="gap-2 -ml-2">
+              <ArrowLeft className="h-4 w-4" />
+              Back to Tasks
+            </Button>
+          </Link>
         </div>
 
         {/* Header */}
-        <div className="text-center mb-8 animate-in slide-in-from-top-4 duration-700">
-          <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-500 rounded-2xl mx-auto flex items-center justify-center mb-4 shadow-lg animate-bounce">
-            <span className="text-2xl">✨</span>
+        <header className="space-y-2 animate-fade-in stagger-1">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <FilePlus className="h-5 w-5 text-primary" />
+            </div>
+            <h1 className="text-2xl font-semibold text-foreground tracking-tight">
+              Create Task
+            </h1>
           </div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
-            Create New Task
-          </h1>
-          <p className="text-gray-600">
-            Let's add something amazing to your task list! 🚀
+          <p className="text-muted-foreground text-sm">
+            Add a new task to your list
           </p>
-        </div>
+        </header>
 
         {/* Form */}
-        <div className="animate-in slide-in-from-bottom-4 duration-700 delay-200">
-          <CreateTaskForm
-            onSuccess={() => navigate({ to: '/' })}
-          />
+        <div className="animate-fade-in stagger-2">
+          <CreateTaskForm onSuccess={() => navigate({ to: '/' })} />
         </div>
       </div>
     </div>
