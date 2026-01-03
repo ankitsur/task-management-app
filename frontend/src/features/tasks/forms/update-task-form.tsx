@@ -61,7 +61,7 @@ function FormField({ label, required, hint, error, children }: FormFieldProps) {
    HELPER FUNCTIONS
 ============================================================================= */
 
-function formatDateForInput(dateString: string | undefined): string {
+function formatDateForInput(dateString: string | undefined | null): string {
   if (!dateString) return ''
   try {
     return new Date(dateString).toISOString().split('T')[0]
@@ -69,6 +69,9 @@ function formatDateForInput(dateString: string | undefined): string {
     return ''
   }
 }
+
+// Special value to represent "no priority" in the select
+const NO_PRIORITY_VALUE = '__NO_PRIORITY__'
 
 /* =============================================================================
    MAIN FORM COMPONENT
@@ -78,12 +81,14 @@ export function UpdateTaskForm({ task, onSuccess }: UpdateTaskFormProps) {
   const updateTask = useTasksStore((state) => state.updateTask)
   const { showNotification } = useNotifications()
 
+  // Initialize form with existing task values
+  // Note: priority can be null/undefined from the backend
   const [formValues, setFormValues] = useState<CreateTaskInput>({
     title: task.title,
     description: task.description ?? '',
     status: task.status,
-    priority: task.priority,
-    dueDate: task.dueDate,
+    priority: task.priority ?? undefined,
+    dueDate: task.dueDate ?? undefined,
   })
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -103,11 +108,29 @@ export function UpdateTaskForm({ task, onSuccess }: UpdateTaskFormProps) {
     [fieldErrors]
   )
 
+  const handlePriorityChange = useCallback((value: string) => {
+    // If user selects "No priority", set to undefined
+    if (value === NO_PRIORITY_VALUE) {
+      updateField('priority', undefined)
+    } else {
+      updateField('priority', value as CreateTaskInput['priority'])
+    }
+  }, [updateField])
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
 
+    // Clean form data: ensure empty strings become undefined for optional fields
+    const cleanedData: CreateTaskInput = {
+      title: formValues.title.trim(),
+      description: formValues.description?.trim() || undefined,
+      status: formValues.status,
+      priority: formValues.priority || undefined,
+      dueDate: formValues.dueDate || undefined,
+    }
+
     // Validate form data
-    const result = createTaskSchema.safeParse(formValues)
+    const result = createTaskSchema.safeParse(cleanedData)
 
     if (!result.success) {
       const errors: Record<string, string> = {}
@@ -135,6 +158,9 @@ export function UpdateTaskForm({ task, onSuccess }: UpdateTaskFormProps) {
       setIsSubmitting(false)
     }
   }
+
+  // Compute select value for priority - use special value for "no priority"
+  const prioritySelectValue = formValues.priority ?? NO_PRIORITY_VALUE
 
   return (
     <Card className="border border-border shadow-sm">
@@ -186,16 +212,15 @@ export function UpdateTaskForm({ task, onSuccess }: UpdateTaskFormProps) {
 
             <FormField label="Priority" hint="Optional">
               <Select
-                value={formValues.priority ?? ''}
-                onValueChange={(value) =>
-                  updateField('priority', value as CreateTaskInput['priority'])
-                }
+                value={prioritySelectValue}
+                onValueChange={handlePriorityChange}
                 disabled={isSubmitting}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="No priority" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value={NO_PRIORITY_VALUE}>No priority</SelectItem>
                   <SelectItem value="LOW">Low</SelectItem>
                   <SelectItem value="MEDIUM">Medium</SelectItem>
                   <SelectItem value="HIGH">High</SelectItem>

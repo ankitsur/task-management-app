@@ -90,7 +90,7 @@ function TaskCard({ task }: TaskCardProps) {
   const taskIsOverdue = task.dueDate ? isOverdue(task.dueDate, task.status) : false
 
   return (
-    <Link to={`/tasks/${task.id}`} className="block group">
+    <Link to={`/tasks/${task.id}`} className="block group cursor-pointer">
       <Card className="border border-border bg-card card-hover">
         <CardContent className="p-5">
           <div className="flex items-start justify-between gap-4">

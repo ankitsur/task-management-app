@@ -56,6 +56,13 @@ function FormField({ label, required, hint, error, children }: FormFieldProps) {
 }
 
 /* =============================================================================
+   CONSTANTS
+============================================================================= */
+
+// Special value to represent "no priority" in the select
+const NO_PRIORITY_VALUE = '__NO_PRIORITY__'
+
+/* =============================================================================
    MAIN FORM COMPONENT
 ============================================================================= */
 
@@ -86,11 +93,29 @@ export function CreateTaskForm({ onSuccess }: CreateTaskFormProps) {
     [fieldErrors]
   )
 
+  const handlePriorityChange = useCallback((value: string) => {
+    // If user selects "No priority", set to undefined
+    if (value === NO_PRIORITY_VALUE) {
+      updateField('priority', undefined)
+    } else {
+      updateField('priority', value as CreateTaskInput['priority'])
+    }
+  }, [updateField])
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
 
+    // Clean form data: ensure empty strings become undefined for optional fields
+    const cleanedData: CreateTaskInput = {
+      title: formValues.title.trim(),
+      description: formValues.description?.trim() || undefined,
+      status: formValues.status,
+      priority: formValues.priority || undefined,
+      dueDate: formValues.dueDate || undefined,
+    }
+
     // Validate form data
-    const result = createTaskSchema.safeParse(formValues)
+    const result = createTaskSchema.safeParse(cleanedData)
 
     if (!result.success) {
       const errors: Record<string, string> = {}
@@ -118,6 +143,9 @@ export function CreateTaskForm({ onSuccess }: CreateTaskFormProps) {
       setIsSubmitting(false)
     }
   }
+
+  // Compute select value for priority - use special value for "no priority"
+  const prioritySelectValue = formValues.priority ?? NO_PRIORITY_VALUE
 
   return (
     <Card className="border border-border shadow-sm">
@@ -170,16 +198,15 @@ export function CreateTaskForm({ onSuccess }: CreateTaskFormProps) {
 
             <FormField label="Priority" hint="Optional">
               <Select
-                value={formValues.priority ?? ''}
-                onValueChange={(value) =>
-                  updateField('priority', value as CreateTaskInput['priority'])
-                }
+                value={prioritySelectValue}
+                onValueChange={handlePriorityChange}
                 disabled={isSubmitting}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="No priority" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value={NO_PRIORITY_VALUE}>No priority</SelectItem>
                   <SelectItem value="LOW">Low</SelectItem>
                   <SelectItem value="MEDIUM">Medium</SelectItem>
                   <SelectItem value="HIGH">High</SelectItem>

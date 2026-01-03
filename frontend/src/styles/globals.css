@@ -25,6 +25,7 @@
     --input: 220 16% 88%;
     --ring: 168 55% 38%;
     --radius: 0.5rem;
+    color-scheme: light;
   }
 
   .dark {
@@ -47,6 +48,7 @@
     --border: 224 20% 18%;
     --input: 224 20% 18%;
     --ring: 168 50% 45%;
+    color-scheme: dark;
   }
 }
 
@@ -111,7 +113,7 @@
 
 /* Card hover effect - subtle lift and shadow */
 .card-hover {
-  @apply transition-all duration-200 ease-out;
+  @apply transition-all duration-200 ease-out cursor-pointer;
 }
 
 .card-hover:hover {
@@ -123,4 +125,26 @@
 /* Focus visible styles for accessibility */
 .focus-ring {
   @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
+}
+
+/* Date input styling for dark mode compatibility */
+input[type="date"] {
+  @apply cursor-pointer;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 4px;
+  opacity: 0.7;
+  transition: opacity 0.15s ease;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+/* Dark mode: invert the calendar icon for visibility */
+.dark input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
 }
