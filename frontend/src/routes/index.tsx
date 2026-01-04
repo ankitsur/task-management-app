@@ -63,17 +63,17 @@ interface SortConfig {
    STATUS & PRIORITY CONFIGURATION
 ============================================================================= */
 
-const STATUS_CONFIG: Record<TaskStatus, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive'; order: number }> = {
-  PENDING: { label: 'Pending', variant: 'secondary', order: 1 },
-  IN_PROGRESS: { label: 'In Progress', variant: 'default', order: 2 },
-  COMPLETED: { label: 'Completed', variant: 'outline', order: 3 },
-  CANCELLED: { label: 'Cancelled', variant: 'destructive', order: 4 },
+const STATUS_CONFIG: Record<TaskStatus, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }> = {
+  PENDING: { label: 'Pending', variant: 'secondary' },
+  IN_PROGRESS: { label: 'In Progress', variant: 'default' },
+  COMPLETED: { label: 'Completed', variant: 'outline' },
+  CANCELLED: { label: 'Cancelled', variant: 'destructive' },
 }
 
-const PRIORITY_CONFIG: Record<TaskPriority, { label: string; className: string; order: number }> = {
-  LOW: { label: 'Low', className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400', order: 1 },
-  MEDIUM: { label: 'Medium', className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400', order: 2 },
-  HIGH: { label: 'High', className: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400', order: 3 },
+const PRIORITY_CONFIG: Record<TaskPriority, { label: string; className: string }> = {
+  LOW: { label: 'Low', className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
+  MEDIUM: { label: 'Medium', className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
+  HIGH: { label: 'High', className: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400' },
 }
 
 /* =============================================================================
@@ -508,7 +508,7 @@ function TaskListPage() {
     }))
   }, [])
 
-  // Fetch tasks with current filters
+  // Fetch tasks with current filters and sorting (server-side)
   useEffect(() => {
     const params = {
       page: currentPage,
@@ -516,38 +516,10 @@ function TaskListPage() {
       ...(debouncedSearch && { search: debouncedSearch }),
       ...(statusFilter !== 'ALL' && { status: statusFilter }),
       ...(priorityFilter !== 'ALL' && { priority: priorityFilter }),
+      ...(sortConfig.field && { sortBy: sortConfig.field, sortOrder: sortConfig.direction }),
     }
     fetchTasks(params)
-  }, [fetchTasks, currentPage, pageSize, debouncedSearch, statusFilter, priorityFilter])
-
-  // Sort tasks client-side
-  const sortedTasks = useMemo(() => {
-    if (!sortConfig.field) return tasks
-
-    return [...tasks].sort((a, b) => {
-      const { field, direction } = sortConfig
-      const multiplier = direction === 'asc' ? 1 : -1
-
-      switch (field) {
-        case 'title':
-          return multiplier * a.title.localeCompare(b.title)
-        case 'status':
-          return multiplier * (STATUS_CONFIG[a.status].order - STATUS_CONFIG[b.status].order)
-        case 'priority': {
-          const aOrder = a.priority ? PRIORITY_CONFIG[a.priority].order : 0
-          const bOrder = b.priority ? PRIORITY_CONFIG[b.priority].order : 0
-          return multiplier * (aOrder - bOrder)
-        }
-        case 'dueDate': {
-          const aDate = a.dueDate ? new Date(a.dueDate).getTime() : 0
-          const bDate = b.dueDate ? new Date(b.dueDate).getTime() : 0
-          return multiplier * (aDate - bDate)
-        }
-      default:
-          return 0
-      }
-    })
-  }, [tasks, sortConfig])
+  }, [fetchTasks, currentPage, pageSize, debouncedSearch, statusFilter, priorityFilter, sortConfig])
 
   // Computed values with defensive checks
   const hasActiveFilters = Boolean(debouncedSearch || statusFilter !== 'ALL' || priorityFilter !== 'ALL')
@@ -683,11 +655,11 @@ function TaskListPage() {
           {/* Task table */}
           {loading ? (
             <LoadingSkeleton />
-          ) : sortedTasks.length === 0 ? (
+          ) : tasks.length === 0 ? (
             <EmptyState hasFilters={hasActiveFilters} />
           ) : (
             <TaskTable 
-              tasks={sortedTasks} 
+              tasks={tasks} 
               sortConfig={sortConfig} 
               onSort={handleSort} 
             />

@@ -6,8 +6,20 @@ import {
   GetTasksQueryDto,
   GetTasksResponseDto,
   TaskListItemDto,
+  TaskSortField,
 } from '../contract';
 import { Task } from 'src/modules/tasks/domain/task.entity';
+
+/**
+ * Map API sort field names to database column names
+ */
+const SORT_FIELD_MAP: Record<TaskSortField, string> = {
+  title: 'task.title',
+  status: 'task.status',
+  priority: 'task.priority',
+  dueDate: 'task.due_date',
+  createdAt: 'task.created_at',
+};
 
 @Injectable()
 export class GetTasksService {
@@ -17,7 +29,15 @@ export class GetTasksService {
   ) {}
 
   async execute(query: GetTasksQueryDto): Promise<GetTasksResponseDto> {
-    const { page = 1, limit = 10, status, priority, search } = query;
+    const {
+      page = 1,
+      limit = 10,
+      status,
+      priority,
+      search,
+      sortBy,
+      sortOrder = 'asc',
+    } = query;
 
     const qb = this.taskRepository.createQueryBuilder('task');
 
@@ -35,9 +55,24 @@ export class GetTasksService {
       });
     }
 
-    qb.orderBy('task.created_at', 'DESC')
-      .skip((page - 1) * limit)
-      .take(limit);
+    // Apply sorting
+    if (sortBy && SORT_FIELD_MAP[sortBy]) {
+      const sortColumn = SORT_FIELD_MAP[sortBy];
+      const order = sortOrder.toUpperCase() as 'ASC' | 'DESC';
+
+      // Handle NULL values for optional fields (priority, dueDate)
+      // NULLS LAST for ASC, NULLS FIRST for DESC (so nulls are always at the end)
+      if (sortBy === 'priority' || sortBy === 'dueDate') {
+        qb.orderBy(sortColumn, order, order === 'ASC' ? 'NULLS LAST' : 'NULLS FIRST');
+      } else {
+        qb.orderBy(sortColumn, order);
+      }
+    } else {
+      // Default sort by created_at DESC
+      qb.orderBy('task.created_at', 'DESC');
+    }
+
+    qb.skip((page - 1) * limit).take(limit);
 
     const [tasks, total] = await qb.getManyAndCount();
 

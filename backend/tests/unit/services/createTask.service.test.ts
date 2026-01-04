@@ -80,7 +80,8 @@ describe('CreateTaskService', () => {
       await service.execute(request);
 
       const createCall = mockRepository.create.mock.calls[0];
-      assert.strictEqual(createCall.arguments[0].status, TaskStatus.PENDING);
+      const createArg = createCall.arguments[0] as { status: TaskStatus };
+      assert.strictEqual(createArg.status, TaskStatus.PENDING);
     });
 
     it('should convert dueDate string to Date object', async () => {
@@ -92,7 +93,8 @@ describe('CreateTaskService', () => {
       await service.execute(request);
 
       const createCall = mockRepository.create.mock.calls[0];
-      assert.ok(createCall.arguments[0].dueDate instanceof Date);
+      const createArg = createCall.arguments[0] as { dueDate: Date };
+      assert.ok(createArg.dueDate instanceof Date);
     });
 
     it('should handle task without dueDate', async () => {
@@ -125,10 +127,16 @@ describe('CreateTaskService', () => {
 
       assert.strictEqual(mockRepository.create.mock.callCount(), 1);
       const createCall = mockRepository.create.mock.calls[0];
-      assert.strictEqual(createCall.arguments[0].title, request.title);
-      assert.strictEqual(createCall.arguments[0].description, request.description);
-      assert.strictEqual(createCall.arguments[0].status, request.status);
-      assert.strictEqual(createCall.arguments[0].priority, request.priority);
+      const createArg = createCall.arguments[0] as { 
+        title: string; 
+        description: string; 
+        status: TaskStatus; 
+        priority: TaskPriority 
+      };
+      assert.strictEqual(createArg.title, request.title);
+      assert.strictEqual(createArg.description, request.description);
+      assert.strictEqual(createArg.status, request.status);
+      assert.strictEqual(createArg.priority, request.priority);
     });
 
     it('should call repository.save with created task', async () => {

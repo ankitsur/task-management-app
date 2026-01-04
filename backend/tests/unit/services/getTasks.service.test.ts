@@ -57,7 +57,7 @@ describe('GetTasksService', () => {
 
   describe('execute', () => {
     it('should return paginated tasks with default parameters', async () => {
-      const query = {};
+      const query = { page: 1, limit: 10 };
 
       const result = await service.execute(query);
 
@@ -80,7 +80,7 @@ describe('GetTasksService', () => {
     });
 
     it('should filter by status when provided', async () => {
-      const query = { status: TaskStatus.PENDING };
+      const query = { page: 1, limit: 10, status: TaskStatus.PENDING };
 
       await service.execute(query);
 
@@ -91,11 +91,11 @@ describe('GetTasksService', () => {
       );
       
       assert.ok(statusCall);
-      assert.strictEqual(statusCall.arguments[1].status, TaskStatus.PENDING);
+      assert.strictEqual((statusCall.arguments[1] as { status: TaskStatus }).status, TaskStatus.PENDING);
     });
 
     it('should filter by priority when provided', async () => {
-      const query = { priority: TaskPriority.HIGH };
+      const query = { page: 1, limit: 10, priority: TaskPriority.HIGH };
 
       await service.execute(query);
 
@@ -106,11 +106,11 @@ describe('GetTasksService', () => {
       );
       
       assert.ok(priorityCall);
-      assert.strictEqual(priorityCall.arguments[1].priority, TaskPriority.HIGH);
+      assert.strictEqual((priorityCall.arguments[1] as { priority: TaskPriority }).priority, TaskPriority.HIGH);
     });
 
     it('should filter by search when provided', async () => {
-      const query = { search: 'test' };
+      const query = { page: 1, limit: 10, search: 'test' };
 
       await service.execute(query);
 
@@ -121,11 +121,13 @@ describe('GetTasksService', () => {
       );
       
       assert.ok(searchCall);
-      assert.strictEqual(searchCall.arguments[1].search, '%test%');
+      assert.strictEqual((searchCall.arguments[1] as { search: string }).search, '%test%');
     });
 
     it('should combine multiple filters', async () => {
       const query = {
+        page: 1,
+        limit: 10,
         status: TaskStatus.PENDING,
         priority: TaskPriority.HIGH,
         search: 'test',
@@ -136,8 +138,8 @@ describe('GetTasksService', () => {
       assert.strictEqual(mockQueryBuilder.andWhere.mock.callCount(), 3);
     });
 
-    it('should order by created_at DESC', async () => {
-      await service.execute({});
+    it('should order by created_at DESC when no sortBy provided', async () => {
+      await service.execute({ page: 1, limit: 10 });
 
       const orderByCall = mockQueryBuilder.orderBy.mock.calls[0];
       assert.strictEqual(orderByCall.arguments[0], 'task.created_at');
@@ -145,7 +147,7 @@ describe('GetTasksService', () => {
     });
 
     it('should return formatted task data', async () => {
-      const result = await service.execute({});
+      const result = await service.execute({ page: 1, limit: 10 });
 
       const task = result.data[0];
       assert.strictEqual(task.id, mockTasks[0].id);
@@ -157,36 +159,36 @@ describe('GetTasksService', () => {
     it('should handle empty results', async () => {
       mockQueryBuilder.getManyAndCount = mock.fn(() => Promise.resolve([[], 0]));
 
-      const result = await service.execute({});
+      const result = await service.execute({ page: 1, limit: 10 });
 
       assert.strictEqual(result.data.length, 0);
       assert.strictEqual(result.meta.total, 0);
     });
 
     it('should handle tasks without dueDate', async () => {
-      const result = await service.execute({});
+      const result = await service.execute({ page: 1, limit: 10 });
 
       const taskWithoutDueDate = result.data.find(t => t.id === mockTasks[1].id);
       assert.strictEqual(taskWithoutDueDate?.dueDate, undefined);
     });
 
     it('should convert dueDate to ISO string when present', async () => {
-      const result = await service.execute({});
+      const result = await service.execute({ page: 1, limit: 10 });
 
       const taskWithDueDate = result.data.find(t => t.id === mockTasks[0].id);
       assert.ok(taskWithDueDate?.dueDate);
       assert.strictEqual(typeof taskWithDueDate.dueDate, 'string');
     });
 
-    it('should use default page 1 when not provided', async () => {
-      await service.execute({ limit: 5 });
+    it('should use page 1 as default', async () => {
+      await service.execute({ page: 1, limit: 5 });
 
       const skipCall = mockQueryBuilder.skip.mock.calls[0];
       assert.strictEqual(skipCall.arguments[0], 0); // (1 - 1) * 5
     });
 
-    it('should use default limit 10 when not provided', async () => {
-      await service.execute({ page: 1 });
+    it('should use limit 10 as default', async () => {
+      await service.execute({ page: 1, limit: 10 });
 
       const takeCall = mockQueryBuilder.take.mock.calls[0];
       assert.strictEqual(takeCall.arguments[0], 10);

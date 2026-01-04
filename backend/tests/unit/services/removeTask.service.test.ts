@@ -62,7 +62,8 @@ describe('RemoveTaskService', () => {
 
       assert.strictEqual(mockRepository.remove.mock.callCount(), 1);
       const removeCall = mockRepository.remove.mock.calls[0];
-      assert.strictEqual(removeCall.arguments[0].id, existingTask.id);
+      const removeArg = removeCall.arguments[0] as { id: string };
+      assert.strictEqual(removeArg.id, existingTask.id);
     });
 
     it('should not call remove if task not found', async () => {

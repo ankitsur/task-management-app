@@ -1,6 +1,16 @@
-import { IsEnum, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, IsString, Min, IsIn } from 'class-validator';
 import { Type } from 'class-transformer';
 import { TaskPriority, TaskStatus } from '../../createTask/contract';
+
+/**
+ * Allowed sort fields for tasks
+ */
+export type TaskSortField = 'title' | 'status' | 'priority' | 'dueDate' | 'createdAt';
+
+/**
+ * Sort direction
+ */
+export type SortOrder = 'asc' | 'desc';
 
 export class GetTasksQueryDto {
   @IsOptional()
@@ -26,6 +36,14 @@ export class GetTasksQueryDto {
   @IsOptional()
   @IsString()
   search?: string;
+
+  @IsOptional()
+  @IsIn(['title', 'status', 'priority', 'dueDate', 'createdAt'])
+  sortBy?: TaskSortField;
+
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  sortOrder?: SortOrder;
 }
 
 export class TaskListItemDto {

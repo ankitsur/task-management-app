@@ -116,8 +116,9 @@ describe('UpdateTaskService', () => {
 
       assert.strictEqual(mockRepository.save.mock.callCount(), 1);
       const saveCall = mockRepository.save.mock.calls[0];
-      assert.strictEqual(saveCall.arguments[0].title, request.title);
-      assert.strictEqual(saveCall.arguments[0].status, request.status);
+      const saveArg = saveCall.arguments[0] as { title: string; status: TaskStatus };
+      assert.strictEqual(saveArg.title, request.title);
+      assert.strictEqual(saveArg.status, request.status);
     });
 
     it('should update priority to undefined when not provided', async () => {

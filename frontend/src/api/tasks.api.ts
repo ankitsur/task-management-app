@@ -1,12 +1,17 @@
 import { http } from '@/lib/http'
 import type { Task, PaginatedTasksResponse } from '@/types/task'
 
+export type TaskSortField = 'title' | 'status' | 'priority' | 'dueDate' | 'createdAt'
+export type SortOrder = 'asc' | 'desc'
+
 export interface GetTasksParams {
   page?: number
   limit?: number
   status?: string
   priority?: string
   search?: string
+  sortBy?: TaskSortField
+  sortOrder?: SortOrder
 }
 
 export function getTasks(params?: GetTasksParams) {
