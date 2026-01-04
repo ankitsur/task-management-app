@@ -21,7 +21,9 @@ A full-stack task management application built with modern technologies and best
 - **Task CRUD Operations**: Create, Read, Update, and Delete tasks
 - **Task Filtering**: Filter tasks by status and priority
 - **Search Functionality**: Search tasks by title
+- **Sorting**: Server-side sorting by title, status, priority, or due date
 - **Pagination**: Server-side pagination for task lists
+- **Tabular View**: Clean table display with sortable columns
 - **Dark/Light Theme**: Toggle between dark and light modes
 - **Responsive Design**: Works on desktop and mobile devices
 - **Form Validation**: Client-side (Zod) and server-side (class-validator) validation
@@ -249,6 +251,8 @@ Once the backend is running, access the interactive API documentation at:
 | `status` | enum | Filter by status (PENDING, IN_PROGRESS, COMPLETED, CANCELLED) | - |
 | `priority` | enum | Filter by priority (LOW, MEDIUM, HIGH) | - |
 | `search` | string | Search by title | - |
+| `sortBy` | enum | Sort by field (title, status, priority, dueDate, createdAt) | createdAt |
+| `sortOrder` | enum | Sort direction (asc, desc) | desc |
 
 ### Request/Response Examples
 
