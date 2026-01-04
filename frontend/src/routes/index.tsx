@@ -14,15 +14,31 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import {
   Plus,
   Search,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  Calendar,
   ListTodo,
   Inbox,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react'
 import { ThemeToggle } from '@/components/theme-toggle'
 import type { TaskStatus, TaskPriority, Task } from '@/types/task'
@@ -32,20 +48,32 @@ export const Route = createFileRoute('/')({
 })
 
 /* =============================================================================
+   TYPES
+============================================================================= */
+
+type SortField = 'title' | 'status' | 'priority' | 'dueDate'
+type SortDirection = 'asc' | 'desc'
+
+interface SortConfig {
+  field: SortField | null
+  direction: SortDirection
+}
+
+/* =============================================================================
    STATUS & PRIORITY CONFIGURATION
 ============================================================================= */
 
-const STATUS_CONFIG: Record<TaskStatus, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }> = {
-  PENDING: { label: 'Pending', variant: 'secondary' },
-  IN_PROGRESS: { label: 'In Progress', variant: 'default' },
-  COMPLETED: { label: 'Completed', variant: 'outline' },
-  CANCELLED: { label: 'Cancelled', variant: 'destructive' },
+const STATUS_CONFIG: Record<TaskStatus, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive'; order: number }> = {
+  PENDING: { label: 'Pending', variant: 'secondary', order: 1 },
+  IN_PROGRESS: { label: 'In Progress', variant: 'default', order: 2 },
+  COMPLETED: { label: 'Completed', variant: 'outline', order: 3 },
+  CANCELLED: { label: 'Cancelled', variant: 'destructive', order: 4 },
 }
 
-const PRIORITY_CONFIG: Record<TaskPriority, { label: string; className: string }> = {
-  LOW: { label: 'Low', className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
-  MEDIUM: { label: 'Medium', className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
-  HIGH: { label: 'High', className: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400' },
+const PRIORITY_CONFIG: Record<TaskPriority, { label: string; className: string; order: number }> = {
+  LOW: { label: 'Low', className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400', order: 1 },
+  MEDIUM: { label: 'Medium', className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400', order: 2 },
+  HIGH: { label: 'High', className: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400', order: 3 },
 }
 
 /* =============================================================================
@@ -77,69 +105,207 @@ function isOverdue(dateString: string, status: TaskStatus): boolean {
 }
 
 /* =============================================================================
-   TASK CARD COMPONENT
+   SORTABLE TABLE HEADER COMPONENT
 ============================================================================= */
 
-interface TaskCardProps {
+interface SortableHeaderProps {
+  label: string
+  field: SortField
+  sortConfig: SortConfig
+  onSort: (field: SortField) => void
+}
+
+function SortableHeader({ label, field, sortConfig, onSort }: SortableHeaderProps) {
+  const isActive = sortConfig.field === field
+  
+  return (
+    <button
+      onClick={() => onSort(field)}
+      className="flex items-center gap-1 hover:text-foreground transition-colors cursor-pointer group"
+    >
+      <span>{label}</span>
+      <span className="opacity-0 group-hover:opacity-100 transition-opacity">
+        {isActive ? (
+          sortConfig.direction === 'asc' ? (
+            <ArrowUp className="h-3.5 w-3.5" />
+          ) : (
+            <ArrowDown className="h-3.5 w-3.5" />
+          )
+        ) : (
+          <ArrowUpDown className="h-3.5 w-3.5" />
+        )}
+      </span>
+      {isActive && (
+        <span className="opacity-100">
+          {sortConfig.direction === 'asc' ? (
+            <ArrowUp className="h-3.5 w-3.5" />
+          ) : (
+            <ArrowDown className="h-3.5 w-3.5" />
+          )}
+        </span>
+      )}
+    </button>
+  )
+}
+
+/* =============================================================================
+   TRUNCATED DESCRIPTION WITH TOOLTIP COMPONENT
+============================================================================= */
+
+interface TruncatedDescriptionProps {
+  description: string | undefined
+  maxLength?: number
+}
+
+function TruncatedDescription({ description, maxLength = 50 }: TruncatedDescriptionProps) {
+  if (!description) {
+    return <span className="text-muted-foreground italic">—</span>
+  }
+
+  const isTruncated = description.length > maxLength
+  const displayText = isTruncated ? `${description.slice(0, maxLength)}...` : description
+
+  if (!isTruncated) {
+    return <span className="text-muted-foreground">{displayText}</span>
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="text-muted-foreground cursor-help border-b border-dashed border-muted-foreground/50">
+          {displayText}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent 
+        side="top" 
+        className="max-w-sm bg-popover text-popover-foreground border border-border shadow-lg p-3"
+      >
+        <p className="text-sm whitespace-pre-wrap">{description}</p>
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+/* =============================================================================
+   TASK TABLE ROW COMPONENT
+============================================================================= */
+
+interface TaskTableRowProps {
   task: Task
 }
 
-function TaskCard({ task }: TaskCardProps) {
+function TaskTableRow({ task }: TaskTableRowProps) {
   const statusConfig = STATUS_CONFIG[task.status]
   const priorityConfig = task.priority ? PRIORITY_CONFIG[task.priority] : null
   const taskIsOverdue = task.dueDate ? isOverdue(task.dueDate, task.status) : false
 
   return (
-    <Link to={`/tasks/${task.id}`} className="block group cursor-pointer">
-      <Card className="border border-border bg-card card-hover">
-        <CardContent className="p-5">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1 min-w-0 space-y-2">
-              {/* Title */}
-              <h3 className="font-medium text-foreground group-hover:text-primary transition-colors duration-150 line-clamp-1">
-                {task.title}
-              </h3>
+    <TableRow className="cursor-pointer group">
+      <TableCell className="font-medium max-w-[200px]">
+        <Link 
+          to={`/tasks/${task.id}`} 
+          className="text-foreground hover:text-primary transition-colors block truncate"
+          title={task.title}
+        >
+          {task.title}
+        </Link>
+      </TableCell>
+      <TableCell className="max-w-[250px]">
+        <TruncatedDescription description={task.description} maxLength={60} />
+      </TableCell>
+      <TableCell>
+        <Badge variant={statusConfig.variant} className="whitespace-nowrap">
+          {statusConfig.label}
+        </Badge>
+      </TableCell>
+      <TableCell>
+        {priorityConfig ? (
+          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap ${priorityConfig.className}`}>
+            {priorityConfig.label}
+          </span>
+        ) : (
+          <span className="text-muted-foreground italic">—</span>
+        )}
+      </TableCell>
+      <TableCell className="whitespace-nowrap">
+        {task.dueDate ? (
+          <span
+            className={`text-sm ${
+              taskIsOverdue
+                ? 'text-destructive font-medium'
+                : 'text-muted-foreground'
+            }`}
+          >
+            {formatDate(task.dueDate)}
+          </span>
+        ) : (
+          <span className="text-muted-foreground italic">—</span>
+        )}
+      </TableCell>
+    </TableRow>
+  )
+}
 
-              {/* Description */}
-              {task.description && (
-                <p className="text-sm text-muted-foreground line-clamp-2">
-                  {task.description}
-                </p>
-              )}
+/* =============================================================================
+   TASK TABLE COMPONENT
+============================================================================= */
 
-              {/* Metadata row */}
-              <div className="flex items-center flex-wrap gap-2 pt-1">
-                {/* Priority badge */}
-                {priorityConfig && (
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${priorityConfig.className}`}>
-                    {priorityConfig.label}
-                  </span>
-                )}
+interface TaskTableProps {
+  tasks: Task[]
+  sortConfig: SortConfig
+  onSort: (field: SortField) => void
+}
 
-                {/* Due date */}
-                {task.dueDate && (
-                  <span
-                    className={`inline-flex items-center gap-1 text-xs ${
-                      taskIsOverdue
-                        ? 'text-destructive font-medium'
-                        : 'text-muted-foreground'
-                    }`}
-                  >
-                    <Calendar className="h-3 w-3" />
-                    {formatDate(task.dueDate)}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Status badge */}
-            <Badge variant={statusConfig.variant} className="shrink-0">
-              {statusConfig.label}
-            </Badge>
-          </div>
-        </CardContent>
-      </Card>
-    </Link>
+function TaskTable({ tasks, sortConfig, onSort }: TaskTableProps) {
+  return (
+    <div className="rounded-lg border border-border bg-card overflow-hidden">
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-muted/50 hover:bg-muted/50">
+            <TableHead className="w-[200px]">
+              <SortableHeader 
+                label="Title" 
+                field="title" 
+                sortConfig={sortConfig} 
+                onSort={onSort} 
+              />
+            </TableHead>
+            <TableHead className="w-[250px]">
+              <span className="text-muted-foreground">Description</span>
+            </TableHead>
+            <TableHead className="w-[120px]">
+              <SortableHeader 
+                label="Status" 
+                field="status" 
+                sortConfig={sortConfig} 
+                onSort={onSort} 
+              />
+            </TableHead>
+            <TableHead className="w-[100px]">
+              <SortableHeader 
+                label="Priority" 
+                field="priority" 
+                sortConfig={sortConfig} 
+                onSort={onSort} 
+              />
+            </TableHead>
+            <TableHead className="w-[120px]">
+              <SortableHeader 
+                label="Due Date" 
+                field="dueDate" 
+                sortConfig={sortConfig} 
+                onSort={onSort} 
+              />
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {tasks.map((task) => (
+            <TaskTableRow key={task.id} task={task} />
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   )
 }
 
@@ -185,24 +351,29 @@ function EmptyState({ hasFilters }: EmptyStateProps) {
 
 function LoadingSkeleton() {
   return (
-    <div className="space-y-3">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <Card key={i} className="border border-border">
-          <CardContent className="p-5">
-            <div className="animate-pulse space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="h-5 bg-muted rounded w-1/3" />
-                <div className="h-5 bg-muted rounded w-20" />
-              </div>
-              <div className="h-4 bg-muted rounded w-2/3" />
-              <div className="flex gap-2">
-                <div className="h-4 bg-muted rounded w-16" />
-                <div className="h-4 bg-muted rounded w-24" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+    <div className="rounded-lg border border-border bg-card overflow-hidden">
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-muted/50">
+            <TableHead className="w-[200px]">Title</TableHead>
+            <TableHead className="w-[250px]">Description</TableHead>
+            <TableHead className="w-[120px]">Status</TableHead>
+            <TableHead className="w-[100px]">Priority</TableHead>
+            <TableHead className="w-[120px]">Due Date</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <TableRow key={i}>
+              <TableCell><div className="h-4 bg-muted rounded w-32 animate-pulse" /></TableCell>
+              <TableCell><div className="h-4 bg-muted rounded w-48 animate-pulse" /></TableCell>
+              <TableCell><div className="h-5 bg-muted rounded w-20 animate-pulse" /></TableCell>
+              <TableCell><div className="h-5 bg-muted rounded w-16 animate-pulse" /></TableCell>
+              <TableCell><div className="h-4 bg-muted rounded w-24 animate-pulse" /></TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   )
 }
@@ -303,6 +474,12 @@ function TaskListPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
 
+  // Sorting state
+  const [sortConfig, setSortConfig] = useState<SortConfig>({
+    field: null,
+    direction: 'asc',
+  })
+
   // Debounce search input
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -318,10 +495,18 @@ function TaskListPage() {
       if (type === 'status') setStatusFilter(value as TaskStatus | 'ALL')
       else if (type === 'priority') setPriorityFilter(value as TaskPriority | 'ALL')
       else if (type === 'pageSize') setPageSize(value as number)
-      setCurrentPage(1)
+    setCurrentPage(1)
     },
     []
   )
+
+  // Handle sorting
+  const handleSort = useCallback((field: SortField) => {
+    setSortConfig((prev) => ({
+      field,
+      direction: prev.field === field && prev.direction === 'asc' ? 'desc' : 'asc',
+    }))
+  }, [])
 
   // Fetch tasks with current filters
   useEffect(() => {
@@ -334,6 +519,35 @@ function TaskListPage() {
     }
     fetchTasks(params)
   }, [fetchTasks, currentPage, pageSize, debouncedSearch, statusFilter, priorityFilter])
+
+  // Sort tasks client-side
+  const sortedTasks = useMemo(() => {
+    if (!sortConfig.field) return tasks
+
+    return [...tasks].sort((a, b) => {
+      const { field, direction } = sortConfig
+      const multiplier = direction === 'asc' ? 1 : -1
+
+      switch (field) {
+        case 'title':
+          return multiplier * a.title.localeCompare(b.title)
+        case 'status':
+          return multiplier * (STATUS_CONFIG[a.status].order - STATUS_CONFIG[b.status].order)
+        case 'priority': {
+          const aOrder = a.priority ? PRIORITY_CONFIG[a.priority].order : 0
+          const bOrder = b.priority ? PRIORITY_CONFIG[b.priority].order : 0
+          return multiplier * (aOrder - bOrder)
+        }
+        case 'dueDate': {
+          const aDate = a.dueDate ? new Date(a.dueDate).getTime() : 0
+          const bDate = b.dueDate ? new Date(b.dueDate).getTime() : 0
+          return multiplier * (aDate - bDate)
+        }
+      default:
+          return 0
+      }
+    })
+  }, [tasks, sortConfig])
 
   // Computed values with defensive checks
   const hasActiveFilters = Boolean(debouncedSearch || statusFilter !== 'ALL' || priorityFilter !== 'ALL')
@@ -357,96 +571,102 @@ function TaskListPage() {
   const showPageSizeSelector = !loading && totalTasks > 5
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+    <TooltipProvider delayDuration={300}>
+      <div className="min-h-screen bg-background">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
         {/* Header */}
-        <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <ListTodo className="h-5 w-5 text-primary" />
-              </div>
-              <h1 className="text-2xl font-semibold text-foreground tracking-tight">
-                Tasks
+          <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <ListTodo className="h-5 w-5 text-primary" />
+                </div>
+                <h1 className="text-2xl font-semibold text-foreground tracking-tight">
+                  Tasks
               </h1>
+              </div>
+              <p className="text-muted-foreground text-sm">
+                Manage and track your work in one place
+              </p>
             </div>
-            <p className="text-muted-foreground text-sm">
-              Manage and track your work in one place
-            </p>
-          </div>
 
-          <div className="flex items-center gap-3">
-            <ThemeToggle />
-            <Link to="/tasks/new">
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                New Task
-              </Button>
-            </Link>
-          </div>
-        </header>
+            <div className="flex items-center gap-3">
+              <ThemeToggle />
+              <Link to="/tasks/new">
+                <Button>
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Task
+                </Button>
+              </Link>
+            </div>
+          </header>
 
         {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-3">
-          {/* Search */}
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search tasks..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9"
-            />
+          <div className="flex flex-col sm:flex-row gap-3">
+              {/* Search */}
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search tasks..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9"
+                />
+              </div>
+
+            {/* Status filter */}
+            <Select
+              value={statusFilter}
+              onValueChange={(value) => handleFilterChange('status', value)}
+            >
+              <SelectTrigger className="w-full sm:w-40">
+                <SelectValue placeholder="Status" />
+                </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All Statuses</SelectItem>
+                <SelectItem value="PENDING">Pending</SelectItem>
+                <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                <SelectItem value="COMPLETED">Completed</SelectItem>
+                <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
+
+            {/* Priority filter */}
+            <Select
+              value={priorityFilter}
+              onValueChange={(value) => handleFilterChange('priority', value)}
+            >
+              <SelectTrigger className="w-full sm:w-40">
+                <SelectValue placeholder="Priority" />
+                </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All Priorities</SelectItem>
+                <SelectItem value="LOW">Low</SelectItem>
+                <SelectItem value="MEDIUM">Medium</SelectItem>
+                <SelectItem value="HIGH">High</SelectItem>
+                </SelectContent>
+              </Select>
           </div>
 
-          {/* Status filter */}
-          <Select
-            value={statusFilter}
-            onValueChange={(value) => handleFilterChange('status', value)}
-          >
-            <SelectTrigger className="w-full sm:w-40">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All Statuses</SelectItem>
-              <SelectItem value="PENDING">Pending</SelectItem>
-              <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
-              <SelectItem value="COMPLETED">Completed</SelectItem>
-              <SelectItem value="CANCELLED">Cancelled</SelectItem>
-            </SelectContent>
-          </Select>
+          {/* Results info */}
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">
+              {loading ? 'Loading...' : `${totalTasks} task${totalTasks !== 1 ? 's' : ''}`}
+              {sortConfig.field && !loading && (
+                <span className="ml-2 text-xs">
+                  • Sorted by {sortConfig.field} ({sortConfig.direction === 'asc' ? '↑' : '↓'})
+                </span>
+              )}
+            </span>
 
-          {/* Priority filter */}
-          <Select
-            value={priorityFilter}
-            onValueChange={(value) => handleFilterChange('priority', value)}
-          >
-            <SelectTrigger className="w-full sm:w-40">
-              <SelectValue placeholder="Priority" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All Priorities</SelectItem>
-              <SelectItem value="LOW">Low</SelectItem>
-              <SelectItem value="MEDIUM">Medium</SelectItem>
-              <SelectItem value="HIGH">High</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Results info */}
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">
-            {loading ? 'Loading...' : `${totalTasks} task${totalTasks !== 1 ? 's' : ''}`}
-          </span>
-
-          {showPageSizeSelector && (
+            {showPageSizeSelector && (
             <div className="flex items-center gap-2">
-              <span className="text-muted-foreground text-xs">Per page:</span>
-              <Select
-                value={pageSize.toString()}
-                onValueChange={(value) => handleFilterChange('pageSize', Number(value))}
-              >
-                <SelectTrigger className="w-16 h-8">
+                <span className="text-muted-foreground text-xs">Per page:</span>
+                <Select
+                  value={pageSize.toString()}
+                  onValueChange={(value) => handleFilterChange('pageSize', Number(value))}
+                >
+                  <SelectTrigger className="w-16 h-8">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -460,30 +680,31 @@ function TaskListPage() {
           )}
         </div>
 
-        {/* Task list */}
-        {loading ? (
-          <LoadingSkeleton />
-        ) : tasks.length === 0 ? (
-          <EmptyState hasFilters={hasActiveFilters} />
-        ) : (
-          <div className="space-y-3">
-            {tasks.map((task) => (
-              <TaskCard key={task.id} task={task} />
-            ))}
-          </div>
-        )}
-
-        {/* Pagination */}
-        {showPagination && (
-          <div className="pt-4">
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={setCurrentPage}
+          {/* Task table */}
+          {loading ? (
+            <LoadingSkeleton />
+          ) : sortedTasks.length === 0 ? (
+            <EmptyState hasFilters={hasActiveFilters} />
+          ) : (
+            <TaskTable 
+              tasks={sortedTasks} 
+              sortConfig={sortConfig} 
+              onSort={handleSort} 
             />
+          )}
+
+          {/* Pagination */}
+          {showPagination && (
+            <div className="pt-4">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+              />
           </div>
         )}
       </div>
     </div>
+    </TooltipProvider>
   )
 }
